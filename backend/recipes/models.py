@@ -1,15 +1,14 @@
 import shortuuid
-from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.db import models
 
-from .constants import (MAX_LENGTH_EMAIL, MAX_LENGTH_USERNAME,
-                        MAX_LENGTH_FIRSTNAME, MAX_LENGTH_LASTNAME,
-                        MAX_LENGTH_NAME_TAG, MAX_LENGTH_SLUG,
-                        MAX_LENGTH_NAME_ING, MAX_LENGTH_UNIT,
-                        MAX_LENGTH_NAME_RECIPE, ORIGINAL_URL,
-                        SHORT_URL, SHORT_URL_LIMIT, SITE_ADDRESS,
-                        MAX_LENGTH_PASSWORD)
-from .validators import validate_username, unicode_validator
+from .constants import (MAX_LENGTH_EMAIL, MAX_LENGTH_FIRSTNAME,
+                        MAX_LENGTH_LASTNAME, MAX_LENGTH_NAME_ING,
+                        MAX_LENGTH_NAME_RECIPE, MAX_LENGTH_NAME_TAG,
+                        MAX_LENGTH_PASSWORD, MAX_LENGTH_SLUG, MAX_LENGTH_UNIT,
+                        MAX_LENGTH_USERNAME, ORIGINAL_URL, SHORT_URL,
+                        SHORT_URL_LIMIT, SITE_ADDRESS)
+from .validators import unicode_validator, validate_username
 
 
 class User(AbstractUser):

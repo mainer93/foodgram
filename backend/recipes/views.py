@@ -1,3 +1,6 @@
+from api.serializers import (IngredientSerializer, RecipeSerializer,
+                             ShoppingCartRecipeSerializer, ShortLinkSerializer,
+                             TagSerializer)
 from django.db.models import F, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect
@@ -12,11 +15,8 @@ from .constants import SITE_ADDRESS
 from .filters import RecipeFilter
 from .models import (Favorite, Ingredient, IngredientInRecipe, Recipe,
                      ShoppingCart, ShortLink, Tag)
+from .pagination import UserListPagination
 from .permissions import IsOwnerOrReadOnly
-from api.serializers import (IngredientSerializer, RecipeSerializer,
-                             ShoppingCartRecipeSerializer, ShortLinkSerializer,
-                             TagSerializer)
-from recipes.pagination import UserListPagination
 
 
 class TagViewSet(viewsets.ReadOnlyModelViewSet):

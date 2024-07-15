@@ -4,12 +4,11 @@ import uuid
 from django.core.files.base import ContentFile
 from djoser.serializers import UserCreateSerializer as BaseUserCreateSerializer
 from djoser.serializers import UserSerializer as BaseUserSerializer
-from rest_framework import serializers
-
-from recipes.constants import (AMOUNT_INGREDIENT, COOKING_TIME,
-                               FORMAT_SPLIT, SITE_ADDRESS)
+from recipes.constants import (AMOUNT_INGREDIENT, COOKING_TIME, FORMAT_SPLIT,
+                               SITE_ADDRESS)
 from recipes.models import (Favorite, Ingredient, IngredientInRecipe, Recipe,
                             ShoppingCart, ShortLink, Subscription, Tag, User)
+from rest_framework import serializers
 
 
 class Base64ImageField(serializers.ImageField):

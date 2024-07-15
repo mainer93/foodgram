@@ -1,4 +1,6 @@
 from django.contrib.auth import get_user_model, update_session_auth_hash
+from recipes.models import Subscription
+from recipes.pagination import UserListPagination
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -8,8 +10,6 @@ from rest_framework.response import Response
 from .serializers import (SetPasswordSerializer, SubscriptionSerializer,
                           UserAvatarSerializer, UserCreateSerializer,
                           UserSerializer)
-from recipes.models import Subscription
-from recipes.pagination import UserListPagination
 
 User = get_user_model()
 
