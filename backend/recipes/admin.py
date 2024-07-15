@@ -28,9 +28,9 @@ class IngredientAdmin(admin.ModelAdmin):
 
 @admin.register(Recipe)
 class RecipeAdmin(admin.ModelAdmin):
-    list_display = ('name', 'author')
+    list_display = ('name', 'author', 'is_favorited', 'is_in_shopping_cart')
     list_filter = ('tags', 'author')
-    search_fields = ('name', 'author__username')
+    search_fields = ('name', 'author')
 
     def is_favorited(self, obj):
         return obj.favorited_by.count()
