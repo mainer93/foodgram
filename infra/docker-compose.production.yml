@@ -13,7 +13,7 @@ services:
     volumes:
       - food_data:/var/lib/postgresql/data/
   backend:
-    build: ../backend/
+    image: mainer93/foodgram_backend
     env_file: ../.env
     depends_on:
       - db
@@ -22,7 +22,7 @@ services:
       - media:/app/media/
       - ../data/ingredients.csv:/app/data/ingredients.csv
   frontend:
-    build: ../frontend/
+    image: mainer93/foodgram_frontend
     env_file: ../.env
     depends_on:
       - backend
@@ -31,7 +31,7 @@ services:
   nginx:
     image: nginx:1.25.4-alpine
     ports:
-      - 80:80
+      - 8000:80
     depends_on:
       - frontend
     volumes:
@@ -40,4 +40,3 @@ services:
       - media:/var/html/media/
       - front_data:/usr/share/nginx/html/
       - ../docs/:/usr/share/nginx/html/api/docs/
-  
