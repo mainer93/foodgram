@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/3.2/ref/settings/
 """
 import os
+
 from distutils.util import strtobool
 from pathlib import Path
 
@@ -26,6 +27,8 @@ DEBUG = bool(strtobool(os.getenv('DEBUG', 'False')))
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',')
 
 CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',')
+
+SITE_ADDRESS = os.getenv('SITE_ADDRESS')
 
 INSTALLED_APPS = [
     'django.contrib.admin',

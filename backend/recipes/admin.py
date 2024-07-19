@@ -26,22 +26,6 @@ class IngredientAdmin(admin.ModelAdmin):
     search_fields = ('name',)
 
 
-@admin.register(Recipe)
-class RecipeAdmin(admin.ModelAdmin):
-    list_display = ('name', 'author', 'is_favorited', 'is_in_shopping_cart')
-    list_filter = ('tags', 'author')
-    search_fields = ('name', 'author')
-
-    def is_favorited(self, obj):
-        return obj.favorited_by.count()
-
-    def is_in_shopping_cart(self, obj):
-        return obj.in_shoppingcart.count()
-
-    is_favorited.short_description = 'Избрано'
-    is_in_shopping_cart.short_description = 'В корзине'
-
-
 @admin.register(IngredientInRecipe)
 class IngredientInRecipeAdmin(admin.ModelAdmin):
     list_display = ('recipe', 'ingredient', 'amount')
@@ -54,9 +38,39 @@ class FavoriteAdmin(admin.ModelAdmin):
 
 @admin.register(ShoppingCart)
 class ShoppingCartAdmin(admin.ModelAdmin):
-    list_display = ('user', 'recipe', 'is_in_shopping_cart')
+    list_display = ('user', 'recipe')
 
 
 @admin.register(ShortLink)
 class ShortLinkAdmin(admin.ModelAdmin):
     list_display = ('original_url', 'short_link')
+
+
+@admin.register(Recipe)
+class RecipeAdmin(admin.ModelAdmin):
+    list_display = ('name', 'author',
+                    'favorited_count', 'in_shopping_cart_count',
+                    'favorited_users', 'in_shopping_cart_users')
+    list_filter = ('tags', 'author')
+    search_fields = ('name', 'author__email')
+    raw_id_fields = ('author',)
+    autocomplete_fields = ('author',)
+
+    def favorited_count(self, obj):
+        return Favorite.objects.filter(recipe=obj).count()
+    favorited_count.short_description = 'Избрано'
+
+    def in_shopping_cart_count(self, obj):
+        return ShoppingCart.objects.filter(recipe=obj).count()
+    in_shopping_cart_count.short_description = 'В корзине'
+
+    def favorited_users(self, obj):
+        users = obj.favorited_by.all()
+        return ', '.join([favorite.user.username for favorite in users])
+
+    def in_shopping_cart_users(self, obj):
+        users = obj.in_shoppingcart.all()
+        return ', '.join([cart.user.username for cart in users])
+
+    favorited_users.short_description = 'Добавили в избранное'
+    in_shopping_cart_users.short_description = 'Добавили в корзину'

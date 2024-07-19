@@ -1,93 +1,41 @@
-from django.contrib.auth import get_user_model, update_session_auth_hash
-from recipes.models import Subscription
-from recipes.pagination import UserListPagination
-from rest_framework import status, viewsets
+from django.contrib.auth import get_user_model
+from django.db.models import F, Sum
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404, redirect
+from django_filters.rest_framework import DjangoFilterBackend
+from djoser.views import UserViewSet as DjoserUserViewSet
+from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import (IsAuthenticated,
+                                        IsAuthenticatedOrReadOnly)
 from rest_framework.response import Response
 
-from .serializers import (SetPasswordSerializer, SubscriptionSerializer,
-                          UserAvatarSerializer, UserCreateSerializer,
+from recipes.models import (Favorite, Ingredient, IngredientInRecipe, Recipe,
+                            ShoppingCart, ShortLink, Subscription, Tag)
+from .filters import IngredientFilter, RecipeFilter
+from .pagination import UserListPagination
+from .permissions import IsOwnerOrReadOnly
+from .serializers import (IngredientSerializer, RecipeSerializer,
+                          ShoppingCartRecipeSerializer, ShortLinkSerializer,
+                          SubscriptionSerializer, TagSerializer,
                           UserSerializer)
 
 User = get_user_model()
 
 
-class UserViewSet(viewsets.ModelViewSet):
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
+class UserViewSet(DjoserUserViewSet):
     pagination_class = UserListPagination
 
-    def get_serializer_class(self):
-        if self.action == 'create':
-            return UserCreateSerializer
-        elif self.action in ['set_avatar', 'delete_avatar']:
-            return UserAvatarSerializer
-        elif self.action == 'set_password':
-            return SetPasswordSerializer
-        elif self.action in ['subscriptions', 'subscribe', 'unsubscribe']:
-            return SubscriptionSerializer
-        return UserSerializer
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['registry'] = (self.action == 'create')
+        return context
 
-    def get_permissions(self):
-        if self.action in ['create', 'list', 'retrieve',
-                           'subscriptions', 'subscribe', 'unsubscribe']:
-            self.permission_classes = [AllowAny]
-        else:
-            self.permission_classes = [IsAuthenticated]
-        if self.action in ['me', 'set_avatar', 'delete_avatar',
-                           'set_password']:
-            self.permission_classes = [IsAuthenticated]
-        return super().get_permissions()
-
-    @action(detail=False, methods=['get', 'put', 'delete'],
-            permission_classes=[IsAuthenticated], url_path='me/avatar')
-    def avatar(self, request):
-        if request.method == 'GET':
-            serializer = self.get_serializer(request.user)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        elif request.method == 'PUT':
-            avatar = request.data.get('avatar')
-            if not avatar:
-                return Response({'avatar': ['Это поле обязательное']},
-                                status=status.HTTP_400_BAD_REQUEST)
-            user = request.user
-            serializer = self.get_serializer(user, data=request.data,
-                                             partial=True)
-            if serializer.is_valid(raise_exception=True):
-                serializer.save()
-                updated_user = User.objects.get(id=user.id)
-                return Response({'avatar': updated_user.avatar.url},
-                                status=status.HTTP_200_OK)
-            return Response(serializer.errors,
-                            status=status.HTTP_400_BAD_REQUEST)
-        elif request.method == 'DELETE':
-            user = request.user
-            user.avatar.delete()
-            user.save()
-            return Response({'avatar': None},
-                            status=status.HTTP_204_NO_CONTENT)
-
-    @action(detail=False, methods=['post'],
-            permission_classes=[IsAuthenticated])
-    def set_password(self, request):
-        user = request.user
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        current_password = serializer.validated_data['current_password']
-        if not user.check_password(current_password):
-            errors = {'current_password': ['Текущий пароль введен неверно']}
-            raise ValidationError(errors)
-        user.set_password(serializer.validated_data['new_password'])
-        user.save()
-        update_session_auth_hash(request, user)
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-    @action(detail=False, methods=['get'],
+    @action(methods=['get'], detail=False,
             permission_classes=[IsAuthenticated])
     def subscriptions(self, request):
-        queryset = Subscription.objects.filter(user=request.user)
+        queryset = request.user.follower.all()
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = SubscriptionSerializer(page, many=True,
@@ -97,52 +45,187 @@ class UserViewSet(viewsets.ModelViewSet):
                                             context={'request': request})
         return Response(serializer.data)
 
-    @action(detail=True, methods=['post', 'delete'],
+    @action(methods=['post', 'delete'], detail=True,
             permission_classes=[IsAuthenticated])
-    def subscribe(self, request, pk=None):
-        author = self.get_object()
-        if not request.user.is_authenticated:
-            return Response({'detail': 'Для выполнения этого действия '
-                             'требуется аутентификация'},
-                            status=status.HTTP_401_UNAUTHORIZED)
+    def subscribe(self, request, id=None):
+        author = get_object_or_404(User, pk=id)
         if request.method == 'POST':
             if request.user == author:
-                return Response({'detail': 'Невозможно '
-                                 'подписаться на себя'},
-                                status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {'detail': 'Невозможно подписаться на самого себя'},
+                    status=status.HTTP_400_BAD_REQUEST)
             if Subscription.objects.filter(user=request.user,
                                            author=author).exists():
-                return Response({'detail': 'Вы уже подписаны '
-                                 'на этого пользователя'},
-                                status=status.HTTP_400_BAD_REQUEST)
-            subscription = Subscription(user=request.user, author=author)
-            subscription.save()
-            serializer = SubscriptionSerializer(subscription,
+                return Response(
+                    {'detail': 'Вы уже подписаны на этого пользователя'},
+                    status=status.HTTP_400_BAD_REQUEST)
+            serializer = SubscriptionSerializer(data={'user': request.user.id,
+                                                      'author': author.id},
                                                 context={'request': request})
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            if serializer.is_valid():
+                serializer.save(user=request.user, author=author)
+                return Response(serializer.data,
+                                status=status.HTTP_201_CREATED)
+            return Response(serializer.errors,
+                            status=status.HTTP_400_BAD_REQUEST)
         elif request.method == 'DELETE':
-            subscription = Subscription.objects.filter(user=request.user,
-                                                       author=author).first()
-            if not subscription:
-                return Response({'detail': 'Подписка не существует'},
+            subscriptions = Subscription.objects.filter(user=request.user,
+                                                        author=author)
+            if not subscriptions.exists():
+                return Response({'error': 'Подписка не существует'},
                                 status=status.HTTP_400_BAD_REQUEST)
-            subscription.delete()
+            subscriptions.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
 
-    def retrieve(self, request, *args, **kwargs):
-        pk = kwargs.get('pk')
-        if pk == 'me':
-            if request.user.is_authenticated:
-                instance = request.user
-                serializer = self.get_serializer(instance)
-                return Response(serializer.data)
-            else:
+    @action(methods=['put', 'patch', 'delete'], detail=False,
+            url_path='me/avatar', permission_classes=[IsAuthenticated])
+    def avatar(self, request):
+        user = request.user
+        if request.method in ['PUT', 'PATCH']:
+            avatar_data = request.data.get('avatar')
+            if avatar_data is None:
                 return Response(
-                    {'detail':
-                        'Для выполнения этого действия '
-                        'требуется аутентификация'},
-                    status=status.HTTP_401_UNAUTHORIZED)
-        else:
-            instance = self.get_object()
-            serializer = self.get_serializer(instance)
-            return Response(serializer.data)
+                    {'error': 'Данные аватара не были предоставлены'},
+                    status=status.HTTP_400_BAD_REQUEST)
+            serializer = UserSerializer(instance=user,
+                                        data={'avatar': avatar_data},
+                                        partial=True,
+                                        context={'request': request,
+                                                 'avatar_set': True})
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        elif request.method == 'DELETE':
+            user.avatar = None
+            user.save()
+            return Response({'message': 'Аватар удален'},
+                            status=status.HTTP_204_NO_CONTENT)
+
+    @action(methods=['get'], detail=False,
+            permission_classes=[IsAuthenticated])
+    def me(self, request):
+        serializer = self.get_serializer(request.user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class TagViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Tag.objects.all()
+    serializer_class = TagSerializer
+
+
+class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
+
+    queryset = Ingredient.objects.all()
+    serializer_class = IngredientSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_class = IngredientFilter
+    search_fields = ['name']
+
+
+class RecipeViewSet(viewsets.ModelViewSet):
+    queryset = Recipe.objects.all()
+    serializer_class = RecipeSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = RecipeFilter
+    pagination_class = UserListPagination
+    permission_classes = [IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly]
+
+    def handle_action(self, request, recipe, user, action_type):
+        if request.method == 'POST':
+            try:
+                if action_type == 'favorite':
+                    self.get_serializer().validate_favorite(recipe, user)
+                    Favorite.objects.create(user=user, recipe=recipe)
+                elif action_type == 'shopping_cart':
+                    self.get_serializer().validate_shopping_cart(recipe, user)
+                    ShoppingCart.objects.create(user=user, recipe=recipe)
+            except ValidationError as e:
+                return Response({'detail': str(e)},
+                                status=status.HTTP_400_BAD_REQUEST)
+            serializer = ShoppingCartRecipeSerializer(
+                recipe, context={'request': request})
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        elif request.method == 'DELETE':
+            if action_type == 'favorite':
+                instance = recipe.favorited_by.filter(user=user).first()
+            elif action_type == 'shopping_cart':
+                instance = recipe.in_shoppingcart.filter(user=user).first()
+            if not instance:
+                detail_msg = (
+                    'Рецепт не был добавлен в избранное'
+                    if action_type == 'favorite'
+                    else 'Рецепт не был добавлен в корзину'
+                )
+                return Response({'detail': detail_msg},
+                                status=status.HTTP_400_BAD_REQUEST)
+            instance.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=['post', 'delete'], url_path='favorite',
+            permission_classes=[IsAuthenticated])
+    def favorite(self, request, pk=None):
+        recipe = self.get_object()
+        user = request.user
+        return self.handle_action(request, recipe, user, 'favorite')
+
+    @action(detail=True, methods=['post', 'delete'], url_path='shopping_cart',
+            permission_classes=[IsAuthenticated])
+    def shopping_cart(self, request, pk=None):
+        recipe = self.get_object()
+        user = request.user
+        return self.handle_action(request, recipe, user, 'shopping_cart')
+
+    @action(detail=False, methods=['get'],
+            permission_classes=[IsAuthenticated])
+    def download_shopping_cart(self, request):
+        user = request.user
+        recipes_in_cart = ShoppingCart.objects.filter(
+            user=user
+        ).values_list('recipe_id', flat=True)
+        shopping_list = IngredientInRecipe.objects.filter(
+            recipe__id__in=recipes_in_cart
+        ).values(
+            name=F('ingredient__name'),
+            unit=F('ingredient__measurement_unit')
+        ).annotate(amount=Sum('amount'))
+        shopping_cart_text = 'Список покупок:\n'
+        for ingredient in shopping_list:
+            shopping_cart_text += (
+                f'{ingredient["name"]} - '
+                f'{ingredient["amount"]} '
+                f'{ingredient["unit"]}\n'
+            )
+        response = HttpResponse(shopping_cart_text, content_type='text/plain')
+        filename = 'shopping_cart.txt'
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+    @action(detail=True, methods=['get'], url_path='get-link')
+    def get_link(self, request, pk=None):
+        recipe = self.get_object()
+        full_url = f'/recipes/{recipe.pk}/'
+        link_obj, created = ShortLink.objects.get_or_create(
+            original_url=full_url)
+        serializer = ShortLinkSerializer(link_obj,
+                                         context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if Favorite.objects.filter(recipe=instance).exists():
+            return Response({'detail': 'Нельзя удалить рецепт, '
+                             'который находится в избранном у кого-то'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if ShoppingCart.objects.filter(recipe=instance).exists():
+            return Response({'detail': 'Нельзя удалить рецепт, '
+                             'который находится в корзине покупок у кого-то'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        self.perform_destroy(instance)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+def redirect_to_full_link(request, short_id):
+    short_link = f'/s/{short_id}'
+    link_obj = get_object_or_404(ShortLink, short_link=short_link)
+    full_link = link_obj.original_url
+    return redirect(full_link)
