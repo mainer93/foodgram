@@ -46,8 +46,19 @@ class UserSerializer(serializers.ModelSerializer):
                     {'current_password': 'Текущий пароль введен неверно'})
         return attrs
 
+    def create(self, validated_data):
+        password = validated_data.pop('password', None)
+        user = super().create(validated_data)
+        if password:
+            user.set_password(password)
+            user.save()
+        return user
+
     def update(self, instance, validated_data):
+        password = validated_data.pop('password', None)
         instance.avatar = validated_data.get('avatar', instance.avatar)
+        if password:
+            instance.set_password(password)
         instance.save()
         return instance
 
