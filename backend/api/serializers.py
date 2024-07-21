@@ -1,4 +1,4 @@
-from django.contrib.auth.hashers import make_password
+from djoser.serializers import (UserCreateSerializer, UserSerializer)
 from drf_extra_fields.fields import Base64ImageField
 from rest_framework import serializers
 
@@ -9,7 +9,7 @@ from recipes.models import (Ingredient, IngredientInRecipe, Recipe, ShortLink,
 from recipes.validators import unicode_validator
 
 
-class UserSerializer(serializers.ModelSerializer):
+class UserSerializer(UserCreateSerializer, UserSerializer):
     is_subscribed = serializers.SerializerMethodField()
     avatar = Base64ImageField(required=False)
     email = serializers.EmailField()
@@ -39,8 +39,6 @@ class UserSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         request = self.context['request']
-        if 'password' in attrs:
-            attrs['password'] = make_password(attrs['password'])
         if 'password' in attrs and request.user.is_authenticated:
             current_password = attrs.get('current_password')
             user = request.user
@@ -49,15 +47,7 @@ class UserSerializer(serializers.ModelSerializer):
                     {'current_password': 'Текущий пароль введен неверно'})
         return attrs
 
-    def create(self, validated_data):
-        validated_data['password'] = make_password(
-            validated_data.get('password'))
-        return super().create(validated_data)
-
     def update(self, instance, validated_data):
-        if 'password' in validated_data:
-            validated_data['password'] = make_password(
-                validated_data['password'])
         instance.avatar = validated_data.get('avatar', instance.avatar)
         instance.save()
         return instance
