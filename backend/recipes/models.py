@@ -6,7 +6,8 @@ from django.db import models
 
 from .constants import (MAX_LENGTH_EMAIL, MAX_LENGTH_FIRSTNAME,
                         MAX_LENGTH_LASTNAME, MAX_LENGTH_NAME_RECIPE,
-                        MAX_LENGTH_NAME_TAG, MAX_LENGTH_SLUG,
+                        MAX_LENGTH_NAME_TAG, MAX_LENGTH_PASSWORD,
+                        MAX_LENGTH_SLUG,
                         MAX_LENGTH_UNIT, MAX_LENGTH_USERNAME,
                         MIN_VALUE_ING, MIN_VALUE_TIME, ORIGINAL_URL,
                         SHORT_URL, SHORT_URL_LIMIT)
@@ -21,6 +22,7 @@ class User(AbstractUser):
                                  validators=[name_validator])
     username = models.CharField(max_length=MAX_LENGTH_USERNAME, unique=True,
                                 validators=[unicode_validator])
+    password = models.CharField(max_length=MAX_LENGTH_PASSWORD)
     avatar = models.ImageField(upload_to='users/', null=True, blank=True)
 
     USERNAME_FIELD = 'email'
