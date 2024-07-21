@@ -1,9 +1,4 @@
-import base64
-
-from django.core.files.base import ContentFile
-from djoser.serializers import (UserCreateSerializer
-                                as DjoserUserCreateSerializer,
-                                UserSerializer as DjoserUserSerializer)
+from drf_extra_fields.fields import Base64ImageField
 from rest_framework import serializers
 
 from recipes.constants import (AMOUNT_INGREDIENT, COOKING_TIME,
@@ -13,16 +8,7 @@ from recipes.models import (Ingredient, IngredientInRecipe, Recipe, ShortLink,
 from recipes.validators import unicode_validator
 
 
-class Base64ImageField(serializers.ImageField):
-    def to_internal_value(self, data):
-        if isinstance(data, str) and data.startswith('data:image'):
-            format, imgstr = data.split(';base64,')
-            ext = format.split('/')[-1]
-            data = ContentFile(base64.b64decode(imgstr), name='temp.' + ext)
-        return super().to_internal_value(data)
-
-
-class UserSerializer(DjoserUserCreateSerializer, DjoserUserSerializer):
+class UserSerializer(serializers.ModelSerializer):
     is_subscribed = serializers.SerializerMethodField()
     avatar = Base64ImageField(required=False)
     email = serializers.EmailField()
@@ -95,9 +81,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
 
     def get_is_subscribed(self, obj):
         request = self.context['request']
-        user = request.user
-        author = obj.author
-        return user.following.filter(author=author).exists()
+        return request.user.following.filter(author=obj.author).exists()
 
     def get_recipes(self, obj):
         request = self.context.get('request')
@@ -114,6 +98,19 @@ class SubscriptionSerializer(serializers.ModelSerializer):
 
     def get_recipes_count(self, obj):
         return obj.author.recipes.count()
+
+    def validate(self, data):
+        request = self.context['request']
+        user = request.user
+        author = User.objects.get(pk=self.initial_data.get('author'))
+        if user == author:
+            raise serializers.ValidationError(
+                {'detail': 'Невозможно подписаться на самого себя'})
+        if Subscription.objects.filter(user=user, author=author).exists():
+            raise serializers.ValidationError(
+                {'detail': 'Вы уже подписаны на этого пользователя'})
+        data['author'] = author
+        return data
 
 
 class TagSerializer(serializers.ModelSerializer):
@@ -144,8 +141,7 @@ class RecipeSerializer(serializers.ModelSerializer):
     tags = TagSerializer(read_only=True, many=True)
     image = Base64ImageField()
     author = UserSerializer(read_only=True)
-    ingredients = RecipeIngredientSerializer(source='ingredientinrecipe_set',
-                                             many=True, read_only=True)
+    ingredients = RecipeIngredientSerializer(many=True, read_only=True)
     is_favorited = serializers.SerializerMethodField()
     is_in_shopping_cart = serializers.SerializerMethodField()
 
@@ -262,14 +258,13 @@ class RecipeSerializer(serializers.ModelSerializer):
             instance.tags.set(tags_data)
         ingredients_data = self.initial_data.get('ingredients')
         if ingredients_data:
-            instance.ingredientinrecipe_set.all().delete()
+            instance.ingredients.all().delete()
             for ingredient_data in ingredients_data:
                 IngredientInRecipe.objects.create(
                     recipe=instance,
                     ingredient_id=ingredient_data['id'],
                     amount=ingredient_data['amount']
                 )
-
         instance.save()
         return instance
 

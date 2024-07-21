@@ -1,13 +1,15 @@
 import shortuuid
 
 from django.contrib.auth.models import AbstractUser
+from django.core.validators import MinValueValidator
 from django.db import models
 
 from .constants import (MAX_LENGTH_EMAIL, MAX_LENGTH_FIRSTNAME,
                         MAX_LENGTH_LASTNAME, MAX_LENGTH_NAME_RECIPE,
-                        MAX_LENGTH_NAME_TAG, MAX_LENGTH_PASSWORD,
-                        MAX_LENGTH_SLUG, MAX_LENGTH_UNIT, MAX_LENGTH_USERNAME,
-                        ORIGINAL_URL, SHORT_URL, SHORT_URL_LIMIT)
+                        MAX_LENGTH_NAME_TAG, MAX_LENGTH_SLUG,
+                        MAX_LENGTH_UNIT, MAX_LENGTH_USERNAME,
+                        MIN_VALUE_ING, MIN_VALUE_TIME, ORIGINAL_URL,
+                        SHORT_URL, SHORT_URL_LIMIT)
 from .validators import name_validator, unicode_validator
 
 
@@ -19,7 +21,6 @@ class User(AbstractUser):
                                  validators=[name_validator])
     username = models.CharField(max_length=MAX_LENGTH_USERNAME, unique=True,
                                 validators=[unicode_validator])
-    password = models.CharField(max_length=MAX_LENGTH_PASSWORD)
     avatar = models.ImageField(upload_to='users/', null=True, blank=True)
 
     USERNAME_FIELD = 'email'
@@ -63,10 +64,6 @@ class Ingredient(BaseModel):
     measurement_unit = models.CharField(max_length=MAX_LENGTH_UNIT)
 
     class Meta:
-        constraints = [
-            models.UniqueConstraint(fields=['name', 'measurement_unit'],
-                                    name='measurement_unit_unique')
-        ]
         default_related_name = 'ingredients'
 
 
@@ -78,17 +75,19 @@ class Tag(BaseModel):
 
 
 class Recipe(models.Model):
-    ingredients = models.ManyToManyField('Ingredient',
-                                         through='IngredientInRecipe',
-                                         through_fields=(
-                                             'recipe', 'ingredient'))
     tags = models.ManyToManyField(Tag, related_name='recipes')
     image = models.ImageField(upload_to='recipes/images/')
     name = models.CharField(max_length=MAX_LENGTH_NAME_RECIPE)
     text = models.TextField()
     author = models.ForeignKey(User, on_delete=models.CASCADE,
                                related_name='recipes')
-    cooking_time = models.PositiveSmallIntegerField()
+    cooking_time = models.PositiveSmallIntegerField(
+        validators=(
+            MinValueValidator(
+                MIN_VALUE_TIME,
+                message='Время приготовления должно быть больше 0'),
+        )
+    )
 
     class Meta:
         ordering = ['-id']
@@ -98,9 +97,17 @@ class Recipe(models.Model):
 
 
 class IngredientInRecipe(models.Model):
-    recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE)
-    ingredient = models.ForeignKey('Ingredient', on_delete=models.CASCADE)
-    amount = models.PositiveSmallIntegerField()
+    recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE,
+                               related_name='recipes')
+    ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE,
+                                   related_name='ingredients')
+    amount = models.PositiveSmallIntegerField(
+        validators=(
+            MinValueValidator(
+                MIN_VALUE_ING,
+                message='Количество ингредиентов должно быть больше 0'),
+        )
+    )
 
     class Meta:
         constraints = [
