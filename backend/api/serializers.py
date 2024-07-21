@@ -39,7 +39,7 @@ class UserSerializer(UserCreateSerializer, UserSerializer):
 
     def validate(self, attrs):
         request = self.context['request']
-        if 'password' in attrs and request.user.is_authenticated:
+        if request.user.is_authenticated and 'password' in attrs:
             current_password = attrs.get('current_password')
             user = request.user
             if not user.check_password(current_password):
@@ -47,7 +47,18 @@ class UserSerializer(UserCreateSerializer, UserSerializer):
                     {'current_password': 'Текущий пароль введен неверно'})
         return attrs
 
+    def create(self, validated_data):
+        password = validated_data.pop('password', None)
+        user = super().create(validated_data)
+        if password:
+            user.set_password(password)
+            user.save()
+        return user
+
     def update(self, instance, validated_data):
+        password = validated_data.pop('password', None)
+        if password:
+            instance.set_password(password)
         instance.avatar = validated_data.get('avatar', instance.avatar)
         instance.save()
         return instance
