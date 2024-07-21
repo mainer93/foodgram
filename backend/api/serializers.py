@@ -1,3 +1,4 @@
+from django.contrib.auth.hashers import make_password
 from drf_extra_fields.fields import Base64ImageField
 from rest_framework import serializers
 
@@ -38,6 +39,8 @@ class UserSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         request = self.context['request']
+        if 'password' in attrs:
+            attrs['password'] = make_password(attrs['password'])
         if 'password' in attrs and request.user.is_authenticated:
             current_password = attrs.get('current_password')
             user = request.user
@@ -46,19 +49,11 @@ class UserSerializer(serializers.ModelSerializer):
                     {'current_password': 'Текущий пароль введен неверно'})
         return attrs
 
-    def create(self, validated_data):
-        password = validated_data.pop('password', None)
-        user = super().create(validated_data)
-        if password:
-            user.set_password(password)
-            user.save()
-        return user
-
     def update(self, instance, validated_data):
-        password = validated_data.pop('password', None)
+        if 'password' in validated_data:
+            validated_data['password'] = make_password(
+                validated_data['password'])
         instance.avatar = validated_data.get('avatar', instance.avatar)
-        if password:
-            instance.set_password(password)
         instance.save()
         return instance
 
