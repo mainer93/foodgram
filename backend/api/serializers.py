@@ -1,4 +1,3 @@
-from django.contrib.auth.hashers import make_password
 from drf_extra_fields.fields import Base64ImageField
 from rest_framework import serializers
 
@@ -21,15 +20,7 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ('email', 'id', 'username', 'first_name', 'last_name',
-                  'password', 'is_subscribed', 'avatar')
-        extra_kwargs = {
-            'email': {'required': True},
-            'username': {'required': True},
-            'first_name': {'required': True},
-            'last_name': {'required': True},
-            'password': {'required': True, 'write_only': True},
-            'avatar': {'required': False},
-        }
+                  'is_subscribed', 'avatar')
 
     def get_is_subscribed(self, obj):
         user = self.context.get('request').user
@@ -37,36 +28,13 @@ class UserSerializer(serializers.ModelSerializer):
             return False
         return obj.following.filter(user=user, author=obj).exists()
 
-    def validate(self, attrs):
-        request = self.context['request']
-        if 'password' in attrs:
-            attrs['password'] = make_password(attrs['password'])
-        if 'password' in attrs and request.user.is_authenticated:
-            current_password = attrs.get('current_password')
-            user = request.user
-            if not user.check_password(current_password):
-                raise serializers.ValidationError(
-                    {'current_password': 'Текущий пароль введен неверно'})
-        return attrs
 
-    def update(self, instance, validated_data):
-        if 'password' in validated_data:
-            validated_data['password'] = make_password(
-                validated_data['password'])
-        instance.avatar = validated_data.get('avatar', instance.avatar)
-        instance.save()
-        return instance
+class AvatarSerializer(serializers.ModelSerializer):
+    avatar = Base64ImageField(required=False)
 
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-        avatar_set = self.context.get('avatar_set')
-        registry = self.context.get('registry', False)
-        if avatar_set:
-            return {'avatar': data['avatar']}
-        if registry:
-            data.pop('is_subscribed', None)
-            data.pop('avatar', None)
-        return data
+    class Meta:
+        model = User
+        fields = ('avatar',)
 
 
 class SubscriptionSerializer(serializers.ModelSerializer):
