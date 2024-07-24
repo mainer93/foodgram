@@ -233,7 +233,7 @@ class RecipeSerializer(serializers.ModelSerializer):
             instance.tags.set(tags_data)
         ingredients_data = self.initial_data.get('ingredients')
         if ingredients_data:
-            instance.ingredients.all().delete()
+            instance.ingredientinrecipe.all().delete()
             for ingredient_data in ingredients_data:
                 IngredientInRecipe.objects.create(
                     recipe=instance,
