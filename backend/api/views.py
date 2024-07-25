@@ -23,7 +23,7 @@ from .serializers import (AvatarSerializer, IngredientSerializer,
 User = get_user_model()
 
 
-class UserViewSet(viewsets.ViewSet):
+class UserViewSet(viewsets.GenericViewSet):
     pagination_class = UserListPagination
 
     @action(methods=['get'], detail=False,

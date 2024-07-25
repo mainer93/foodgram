@@ -77,7 +77,8 @@ class Tag(BaseModel):
 class Recipe(models.Model):
     tags = models.ManyToManyField(Tag, related_name='recipes')
     image = models.ImageField(upload_to='recipes/images/')
-    name = models.CharField(max_length=MAX_LENGTH_NAME_RECIPE)
+    name = models.CharField(max_length=MAX_LENGTH_NAME_RECIPE,
+                            validators=[name_validator])
     text = models.TextField()
     author = models.ForeignKey(User, on_delete=models.CASCADE,
                                related_name='recipes')

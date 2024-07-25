@@ -1,5 +1,6 @@
 from django.contrib import admin
 
+from .constants import EXTRA_FIELD
 from .models import (Favorite, Ingredient, IngredientInRecipe, Recipe,
                      ShoppingCart, ShortLink, Subscription, Tag, User)
 
@@ -26,11 +27,6 @@ class IngredientAdmin(admin.ModelAdmin):
     search_fields = ('name',)
 
 
-@admin.register(IngredientInRecipe)
-class IngredientInRecipeAdmin(admin.ModelAdmin):
-    list_display = ('recipe', 'ingredient', 'amount')
-
-
 @admin.register(Favorite)
 class FavoriteAdmin(admin.ModelAdmin):
     list_display = ('user', 'recipe')
@@ -46,6 +42,11 @@ class ShortLinkAdmin(admin.ModelAdmin):
     list_display = ('original_url', 'short_link')
 
 
+class IngredientInRecipeInline(admin.TabularInline):
+    model = IngredientInRecipe
+    extra = EXTRA_FIELD
+
+
 @admin.register(Recipe)
 class RecipeAdmin(admin.ModelAdmin):
     list_display = ('name', 'author',
@@ -55,6 +56,7 @@ class RecipeAdmin(admin.ModelAdmin):
     search_fields = ('name', 'author__email')
     raw_id_fields = ('author',)
     autocomplete_fields = ('author',)
+    inlines = [IngredientInRecipeInline]
 
     def favorited_count(self, obj):
         return Favorite.objects.filter(recipe=obj).count()
