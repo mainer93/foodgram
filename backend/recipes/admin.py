@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .constants import EXTRA_FIELD
+from .constants import EXTRA_FIELD, MIN_NUMBER
 from .models import (Favorite, Ingredient, IngredientInRecipe, Recipe,
                      ShoppingCart, ShortLink, Subscription, Tag, User)
 
@@ -45,6 +45,8 @@ class ShortLinkAdmin(admin.ModelAdmin):
 class IngredientInRecipeInline(admin.TabularInline):
     model = IngredientInRecipe
     extra = EXTRA_FIELD
+    min_num = MIN_NUMBER
+    validate_min = True
 
 
 @admin.register(Recipe)
